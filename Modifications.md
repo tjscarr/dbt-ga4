@@ -12,7 +12,7 @@ All outputs to staging
 ```
 models:
   ga4:
-    +schema: "staging"
+    +schema: staging
     +materialized: view
     marts:
       +materialized: table
