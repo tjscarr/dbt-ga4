@@ -47,8 +47,12 @@ clean-targets:         # directories to be removed by `dbt clean`
 # The main base events model is materialized as a partitioned, incremental table
 # The staging models are materialized as views
 # The dimensional models are materialized as tables
+
 models:
   ga4:
+    schema: "staging"
     +materialized: view
     marts:
       +materialized: table
+
+      
