@@ -48,6 +48,10 @@ clean-targets:         # directories to be removed by `dbt clean`
 # The staging models are materialized as views
 # The dimensional models are materialized as tables
 
+seeds:
+  ga4:
+    +schema: staging
+    
 models:
   ga4:
     +schema: staging

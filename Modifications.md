@@ -10,6 +10,10 @@ Convert variables to env_variables
 ## dbt_project.yml
 All outputs to staging
 ```
+seeds:
+  ga4:
+    +schema: staging
+    
 models:
   ga4:
     +schema: staging
