@@ -3,10 +3,7 @@
 
 with base_events as (
     select * from {{ ref('base_ga4__events')}}
-    {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
-    union all
-    select * from {{ref('base_ga4__events_intraday')}}
-    {% endif %}
+
 ),
 -- Add unique key for sessions. session_key will be null if user_pseudo_id is null due to consent being denied. ga_session_id may be null during audience trigger events. 
 include_session_key as (
