@@ -51,7 +51,7 @@ with source as (
         platform,
         ecommerce,
         items,
-    {%  if var('frequency', 'daily') == 'streaming' %}
+    {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
         from {{ source('ga4', 'events_intraday') }}
         where cast( _table_suffix as int64) >= {{var('start_date')}}
     {% else %}

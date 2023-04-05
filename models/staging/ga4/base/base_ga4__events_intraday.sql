@@ -1,4 +1,4 @@
-{% if var('frequency', 'daily') == 'daily+streaming' %}
+{% if env_var('DBT_GA4_INTRADAY') != 'false' %}
     {{ config(
     enabled = true 
     ) }}
