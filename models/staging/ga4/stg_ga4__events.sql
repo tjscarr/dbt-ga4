@@ -1,8 +1,9 @@
 -- This staging model contains key creation and window functions. Keeping window functions outside of the base incremental model ensures that the incremental updates don't artificially limit the window partition sizes (ex: if a session spans 2 days, but only 1 day is in the incremental update)
 
+
 with base_events as (
     select * from {{ ref('base_ga4__events')}}
-    {% if var('frequency', 'daily') == 'daily+streaming' %}
+    {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
     union all
     select * from {{ref('base_ga4__events_intraday')}}
     {% endif %}
