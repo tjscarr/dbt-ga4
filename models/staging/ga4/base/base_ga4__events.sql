@@ -54,7 +54,7 @@ with source as (
         from {{ source('ga4', 'events') }}
         where _table_suffix not like '%intraday%'
         and cast( _table_suffix as int64) >= {{var('start_date')}}
-    {% endif %}
+    
     {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
     union all
      select 
