@@ -51,14 +51,41 @@ with source as (
         platform,
         ecommerce,
         items,
-    {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
-        from {{ source('ga4', 'events_intraday') }}
-        where cast( _table_suffix as int64) >= {{var('start_date')}}
-    {% else %}
         from {{ source('ga4', 'events') }}
         where _table_suffix not like '%intraday%'
         and cast( _table_suffix as int64) >= {{var('start_date')}}
     {% endif %}
+    {% if env_var('DBT_GA4_INTRADAY') != 'false' %}
+    union all
+     select 
+        parse_date('%Y%m%d',event_date) as event_date_dt,
+        event_timestamp,
+        event_name,
+        event_params,
+        event_previous_timestamp,
+        event_value_in_usd,
+        event_bundle_sequence_id,
+        event_server_timestamp_offset,
+        user_id,
+        user_pseudo_id,
+        privacy_info,
+        user_properties,
+        user_first_touch_timestamp,
+        user_ltv,
+        device,
+        geo,
+        app_info,
+        traffic_source,
+        stream_id,
+        platform,
+        ecommerce,
+        items,
+   
+        from {{ source('ga4', 'events_intraday') }}
+        where cast( _table_suffix as int64) >= {{var('start_date')}}
+
+    {% endif %}
+
     {% if is_incremental() %}
 
         {% if var('static_incremental_days', false ) %}
