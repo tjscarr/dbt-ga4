@@ -50,11 +50,11 @@ clean-targets:         # directories to be removed by `dbt clean`
 
 seeds:
   ga4:
-    +schema: staging
+    +schema:  "{{env_var('DBT_ENV_ALIAS')}}_staging"
     
 models:
   ga4:
-    +schema: staging
+    +schema: "{{env_var('DBT_ENV_ALIAS')}}_staging"
     +materialized: view
     marts:
       +materialized: table
