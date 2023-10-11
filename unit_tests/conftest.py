@@ -23,3 +23,10 @@ def dbt_profile_target():
         'threads': 4,
         'project':  os.environ.get("BIGQUERY_PROJECT")
     }
+
+@pytest.fixture(scope="class")
+def project_config_update():
+    return {
+            'name': 'ga4'
+            , 'vars':{'static_incremental_days':3}
+            }

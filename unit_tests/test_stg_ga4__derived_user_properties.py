@@ -2,12 +2,12 @@ import pytest
 from dbt.tests.util import read_file,check_relations_equal,run_dbt
 
 mock_stg_ga4__events_json = """
-{  "user_pseudo_id": "AAA",  "event_timestamp": "1617691790431476",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 1,      "float_value": null,      "double_value": null    }}]}
-{  "user_pseudo_id": "AAA",  "event_timestamp": "1617691790431477",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 2,      "float_value": null,      "double_value": null    }}]}
-{  "user_pseudo_id": "BBB",  "event_timestamp": "1617691790431477",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 1,      "float_value": null,      "double_value": null    }}]}
+{  "client_key": "AAA",  "event_timestamp": "1617691790431476",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 1,      "float_value": null,      "double_value": null    }}]}
+{  "client_key": "AAA",  "event_timestamp": "1617691790431477",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 2,      "float_value": null,      "double_value": null    }}]}
+{  "client_key": "BBB",  "event_timestamp": "1617691790431477",  "event_name": "first_visit",  "event_params": [{    "key": "my_param",    "value": {      "string_value": null,      "int_value": 1,      "float_value": null,      "double_value": null    }}]}
 """.lstrip()
 
-expected_csv = """user_pseudo_id,my_derived_property
+expected_csv = """client_key,my_derived_property
 AAA,2
 BBB,1
 """.lstrip()
@@ -42,7 +42,7 @@ class TestDerivedUserProperties():
         return {
             "config.yml": models__config_yml,
             "stg_ga4__events.sql": "select * from {{source('fixture','mock_stg_ga4__events_json')}}",
-            "actual.sql": read_file('../models/staging/ga4/stg_ga4__derived_user_properties.sql')
+            "actual.sql": read_file('../models/staging/stg_ga4__derived_user_properties.sql')
         }
 
     # everything that goes in the "macros"
