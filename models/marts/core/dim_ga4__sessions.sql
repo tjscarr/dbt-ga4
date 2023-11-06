@@ -10,6 +10,9 @@ with session_first_event as
  session_start_dims as (
     select 
         session_key,
+        event_date_dt as session_start_date,
+        event_timestamp as session_start_timestamp,
+        page_path as landing_page_path,
         page_location as landing_page,
         page_hostname as landing_page_hostname,
         page_referrer as landing_page_referrer,
@@ -37,21 +40,23 @@ with session_first_event as
         device_web_info_browser,
         device_web_info_browser_version,
         device_web_info_hostname,
-        traffic_source_name,
-        traffic_source_medium,
-        traffic_source_source,
+        session_number,
+        session_number = 1 as is_first_session,
+        user_campaign,
+        user_medium,
+        user_source,
     from session_first_event
 ),
 join_traffic_source as (
     select 
         session_start_dims.*,
-        sessions_traffic_sources.source,
-        sessions_traffic_sources.medium,
-        sessions_traffic_sources.campaign,
-        sessions_traffic_sources.content,
-        sessions_traffic_sources.term,
-        sessions_traffic_sources.default_channel_grouping,
-        sessions_traffic_sources.source_category
+        sessions_traffic_sources.session_source,
+        sessions_traffic_sources.session_medium,
+        sessions_traffic_sources.session_campaign,
+        sessions_traffic_sources.session_content,
+        sessions_traffic_sources.session_term,
+        sessions_traffic_sources.session_default_channel_grouping,
+        sessions_traffic_sources.session_source_category
     from session_start_dims
     left join {{ref('stg_ga4__sessions_traffic_sources')}} sessions_traffic_sources using (session_key)
 ),

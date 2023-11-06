@@ -2,7 +2,7 @@ import pytest
 from dbt.tests.util import read_file,check_relations_equal,run_dbt
 
 # Define mocks via CSV (seeds) or SQL (models)
-mock_stg_ga4__events_csv = """user_pseudo_id,user_id,event_timestamp
+mock_stg_ga4__events_csv = """client_key,user_id,event_timestamp
 a1,,100
 a1,A,101
 b1,B,102
@@ -12,14 +12,14 @@ c2,,105
 d1,,100
 """.lstrip()
 
-expected_csv = """last_seen_user_id,user_pseudo_id,last_seen_user_id_timestamp
+expected_csv = """last_seen_user_id,client_key,last_seen_user_id_timestamp
 A,a1,101
 B,b1,102
 C,c1,103
 C,c2,104
 """.lstrip()
 
-actual = read_file('../models/staging/ga4/stg_ga4__user_id_mapping.sql')
+actual = read_file('../models/staging/stg_ga4__user_id_mapping.sql')
 
 class TestUserIdMapping():
     # everything that goes in the "seeds" directory (= CSV format)

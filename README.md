@@ -7,6 +7,7 @@ Features include:
 - Conversion of sharded event tables into a single partitioned table
 - Incremental loading of GA4 data into your staging tables 
 - Page, session and user dimensional models with conversion counts
+- Last non-direct session attribution
 - Simple methods for accessing query parameters (like UTM params) or filtering query parameters (like click IDs)
 - Support for custom event parameters & user properties
 - Mapping from source/medium to default channel grouping
@@ -20,12 +21,15 @@ Features include:
 | stg_ga4__event_items | Contains item data associated with e-commerce events (Purchase, add to cart, etc) |
 | stg_ga4__event_to_query_string_params | Mapping between each event and any query parameters & values that were contained in the event's `page_location` field |
 | stg_ga4__user_properties | Finds the most recent occurance of specified user_properties for each user |
-| stg_ga4__derived_user_properties | Finds the most recent occurance of specific event_params value and assigns them to a user_pseudo_id. Derived user properties are specified as variables (see documentation below) |
+| stg_ga4__derived_user_properties | Finds the most recent occurance of specific event_params value and assigns them to a client_key. Derived user properties are specified as variables (see documentation below) |
 | stg_ga4__derived_session_properties | Finds the most recent occurance of specific event_params or user_properties value and assigns them to a session's session_key. Derived session properties are specified as variables (see documentation below) |
 | stg_ga4__session_conversions_daily | Produces daily counts of conversions per session. The list of conversion events to include is configurable (see documentation below) |
 | stg_ga4__sessions_traffic_sources | Finds the first source, medium, campaign, content, paid search term (from UTM tracking), and default channel grouping for each session. |
-| dim_ga4__user_pseudo_ids | Dimension table for user devices as indicated by user_pseudo_ids. Contains attributes such as first and last page viewed.| 
-| dim_ga4__sessions | Dimension table for sessions which contains useful attributes such as geography, device information, and acquisition data |
+| stg_ga4__sessions_traffic_sources_daily | Same data as stg_ga4__sessions_traffic_sources, but partitioned by day to allow for efficient loading and querying of data. |
+| stg_ga4__sessions_traffic_sources_last_non_direct_daily | Finds the last non-direct source attributed to each session within a 30-day lookback window. Assumes each session is contained within a day. |
+| dim_ga4__client_keys | Dimension table for user devices as indicated by client_keys. Contains attributes such as first and last page viewed.| 
+| dim_ga4__sessions | Dimension table for sessions which contains useful attributes such as geography, device information, and acquisition data. Can be expensive to run on large installs (see `dim_ga4__sessions_daily`) |
+| dim_ga4__sessions_daily | Query-optimized session dimension table that is incremental and partitioned on date. Assumes that each partition is contained within a single day |
 | fct_ga4__pages | Fact table for pages which aggregates common page metrics by page_location, date, and hour. |
 | fct_ga4__sessions_daily | Fact table for session metrics, partitioned by date. A single session may span multiple rows given that sessions can span multiple days.  |
 | fct_ga4__sessions | Fact table that aggregates session metrics across days. This table is not partitioned, so be mindful of performance/cost when querying. |
@@ -40,22 +44,21 @@ Be sure to run `dbt seed` before you run `dbt run`.
 
 # Installation & Configuration
 ## Install from DBT Package Hub
-Add the following to your `packages.yml` file:
+To pull the latest stable release along with minor updates, add the following to your `packages.yml` file:
 
 ```
 packages:
   - package: Velir/ga4
-    version: [">=2.0.0", "<2.2.0"]
+    version: [">=5.0.0", "<5.1.0"]
 ```
 
-## Install From GitHub
+## Install From main branch on GitHub
 
-Add the following to your `packages.yml` file:
+To install the latest code (may be unstable), add the following to your `packages.yml` file:
 
 ```
 packages:
   - git: "https://github.com/Velir/dbt-ga4.git"
-    revision: 2.0.0
 ```
 
 ## Install From Local Directory
@@ -69,7 +72,7 @@ packages:
 ```
 ## Required Variables
 
-This package assumes that you have an existing DBT project with a BigQuery profile and a BigQuery GCP instance available with GA4 event data loaded. Source data is defined using the following variables which must be set in `dbt_project.yml`.
+This package assumes that you have an existing DBT project with a BigQuery profile and a BigQuery GCP instance available with GA4 event data loaded. Source data is defined using the `project` and `dataset` variables below. The `static_incremental_days` variable defines how many days' worth of data to reprocess during incremental runs. 
 
 ```
 vars:
@@ -77,8 +80,9 @@ vars:
     project: "your_gcp_project"
     dataset: "your_ga4_dataset"
     start_date: "YYYYMMDD" # Earliest date to load
-    frequency: "daily" # daily|streaming|daily+streaming. See 'Export Frequency' below.
+    static_incremental_days: 3 # Number of days to scan and reprocess on each run
 ```
+See [Multi-Property Support](#multi-property-support) section for details on configuring multiple GA4 properties as a source.
 
 ## Optional Variables
 
@@ -91,6 +95,18 @@ vars:
   ga4: 
     query_parameter_exclusions: ["gclid","fbclid","_ga"] 
 ```
+
+### Query Parameter Extraction
+
+Setting `query_parameter_extraction` will extract query string parameters from the `page_location` field into new columns. This can be used to extract advertising click IDs into columns that can be joined with advertising data sets. Ex:
+
+```
+vars:
+  ga4: 
+    query_parameter_extraction: ["gclid","fbclid","keyword"] 
+```
+
+
 ### Custom Parameters
 
 Within GA4, you can add custom parameters to any event. These custom parameters will be picked up by this package if they are defined as variables within your `dbt_project.yml` file using the following syntax:
@@ -179,7 +195,7 @@ vars:
 
 Derived session properties are similar to derived user properties, but on a per-session basis, for properties that change slowly over time. This provides additional flexibility in allowing users to turn any event parameter into a session property. 
 
-Derived Session Properties are included in the `fct_ga4__sessions` model and contain the latest event parameter or user property value per session.
+Derived Session Properties are included in the `dim_ga4__sessions` and `dim_ga4__sessions_daily` models and contain the latest event parameter or user property value per session.
 
 ```
 derived_session_properties:
@@ -210,7 +226,7 @@ vars:
 
 ### GA4 Recommended Events
 
-See the README file at /dbt_packages/models/staging/ga4/recommended_events for instructions on enabling [Google's recommended events](https://support.google.com/analytics/answer/9267735?hl=en).
+See the README file at /dbt_packages/models/staging/recommended_events for instructions on enabling [Google's recommended events](https://support.google.com/analytics/answer/9267735?hl=en).
 
 ### Conversion Events
 
@@ -222,35 +238,35 @@ vars:
     conversion_events:['purchase','download']
 ```
 
-# Incremental Loading of Event Data (and how to handle late-arriving hits)
+### Session Attribution Lookback Window
 
-By default, GA4 exports data into sharded event tables that use the event date as the table suffix in the format of `events_YYYYMMDD` or `events_intraday_YYYYMMDD`. This package incrementally loads data from these tables into `base_ga4__events` which is partitioned on date. There are two incremental loading strategies available:
-
-- Dynamic incremental partitions (Default) - This strategy queries the destination table to find the latest date available. Data beyond that date range is loaded in incrementally on each run.
-- Static incremental partitions - This strategy is enabled when the `static_incremental_days` variable is set to an integer. It incrementally loads in the last X days worth of data regardless of what data is availabe. Google will update the daily event tables within the last 72 hours to handle late-arriving hits so you should use this strategy if late-arriving hits is a concern. The 'dynamic incremental' strategy will not re-process past date tables. Ex: A `static_incremental_days` setting of `3` would load data from `current_date - 1` `current_date - 2` and `current_date - 3`. Note that `current_date` uses UTC as the timezone.
-
-# Export Frequency
-
-The value of the `frequency` variable should match the "Frequency" setting on GA4's BigQuery Linking Admin page.
-
-| GA4 | dbt_project.yml |
-|-----|-----------------|
-| Daily | "daily" |
-| Streaming | "streaming" |
-| both Daily and Streaming | "daily+streaming" |
-
-The daily option (default) is for sites that use just the daily, batch export. It can also be used as a substitute for the "daily+streaming" option where you don't care about including today's data so it doesn't strictly need to match the GA4 "Frequency" setting.
-The streaming option is for sites that only use the streaming export. The streaming export is not constrained by Google's one million event daily limit and so is the best option for sites that may exceed that limit. Selecting both "Daily" and "Streaming" in GA4 causes the streaming, intraday BigQuery tables to be deleted when the daily, batch tables are updated.
-The "daily+streaming" option uses the daily batch export and unions the streaming intraday tables. It is intended to append today's data from the streaming intraday to the batch tables.
-
-Example:
+The `stg_ga4__sessions_traffic_sources_last_non_direct_daily` model provides last non-direct session attribution within a configurable lookback window. The default is 30 days, but this can be overridden with the `session_attribution_lookback_window_days` variable.
 
 ```
 vars:
   ga4:
-    frequency:"daily+streaming"
+    session_attribution_lookback_window_days: 90
 ```
 
+# Custom Events
+
+Custom events can be generated in your project using the `create_custom_event` macro. Simply create a new model in your project and enter the following:
+
+```
+{{ ga4.create_custom_event('my_custom_event') }}
+```
+
+Note, however, that any event-specific custom parameters or default custom parameters must be defined in the global variable space as shown below:
+
+```
+vars:
+    default_custom_parameters:
+      - name: "some_parameter"
+        value_type: "string_value"
+    my_custom_event_custom_parameters:
+      - name: "some_other_parameter"
+        value_type: "string_value"
+```
 # Connecting to BigQuery
 
 This package assumes that BigQuery is the source of your GA4 data. Full instructions for connecting DBT to BigQuery are here: https://docs.getdbt.com/reference/warehouse-profiles/bigquery-profile
@@ -266,3 +282,41 @@ gcloud auth application-default login --scopes=https://www.googleapis.com/auth/b
 # Unit Testing
 
 This package uses `pytest` as a method of unit testing individual models. More details can be found in the [unit_tests/README.md](unit_tests) folder.
+
+# Overriding Default Channel Groupings
+
+By default, this package maps traffic sources to channel groupings using the `macros/default_channel_grouping.sql` macro. This macro closely adheres to Google's recommended channel groupings documented here: https://support.google.com/analytics/answer/9756891?hl=en .
+
+Package users can override this macro and implement their own channel groupings by following these steps:
+- Create a macro in your project named `default__default_channel_grouping` that accepts the same 3 arguments: source, medium, source_category
+- Implement your custom logic within that macro. It may be easiest to first copy the code from the package macro and modify from there.
+
+Overriding the package's default channel mapping makes use of dbt's dispatch override capability documented here: https://docs.getdbt.com/reference/dbt-jinja-functions/dispatch#overriding-package-macros
+
+# Multi-Property Support
+
+Multiple GA4 properties are supported by listing out the project IDs in the `property_ids` variable. In this scenario, the `static_incremental_days` variable is required and the `dataset` variable will define the target dataset where source data will be copied.
+
+```
+vars:
+  ga4:
+    property_ids: [11111111, 22222222, 33333333]
+    static_incremental_days: 3
+    dataset: "my_combined_dataset"
+```
+
+With these variables set, the `combine_property_data` macro will run as a pre-hook to `base_ga4_events` and clone shards to the target dataset.  The number of days' worth of data to clone during incremental runs will be based on the `static_incremental_days` variable. 
+
+Jobs that run a large number of clone operations are prone to timing out. As a result, it is recommended that you increase the query timeout if you need to backfill or full-refresh the table, when first setting up or when the base model gets modified. Otherwise, it is best to prevent the base model from rebuilding on full refreshes unless needed to minimize timeouts.
+
+```
+models:
+  ga4:
+    staging:
+      base:
+        base_ga4__events:
+          +full_refresh: false
+```
+# dbt Stlye Guide
+
+This package attempts to adhere to the Brooklyn Data style guide found [here](https://github.com/brooklyn-data/co/blob/main/sql_style_guide.md). This work is in-progress. 
